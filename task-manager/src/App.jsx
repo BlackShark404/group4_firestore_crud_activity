@@ -1,120 +1,90 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
+import { useState, useEffect } from 'react'
+import { collection, addDoc, onSnapshot, doc, updateDoc, deleteDoc, serverTimestamp, orderBy, query } from 'firebase/firestore'
+import { db } from './firebase'
 import './App.css'
 
 function App() {
-  const [count, setCount] = useState(0)
+  const [tasks, setTasks] = useState([]);
+  const [newTask, setNewTask] = useState("");
+
+  useEffect(() => {
+    const q = query(collection(db, "tasks"), orderBy("createdAt", "desc"));
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const taskList = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setTasks(taskList);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  const addTask = async (e) => {
+    e.preventDefault();
+    if (newTask.trim() === "") return;
+    try {
+      await addDoc(collection(db, "tasks"), {
+        name: newTask,
+        status: "active",
+        createdAt: serverTimestamp()
+      });
+      setNewTask("");
+    } catch (e) {
+      console.error("Error adding task:", e);
+    }
+  };
+
+  const markAsDone = async (id) => {
+    const taskRef = doc(db, "tasks", id);
+    try {
+      await updateDoc(taskRef, {
+        status: "done"
+      });
+    } catch (e) {
+      console.error("Error updating task:", e);
+    }
+  };
+
+  const deleteTask = async (id) => {
+    const taskRef = doc(db, "tasks", id);
+    try {
+      await deleteDoc(taskRef);
+    } catch (e) {
+      console.error("Error deleting task:", e);
+    }
+  };
 
   return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.jsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+    <div className="App" style={{ padding: '20px', maxWidth: '600px', margin: '0 auto', fontFamily: 'sans-serif' }}>
+      <h1>Student Task Manager</h1>
+      
+      <form onSubmit={addTask} style={{ marginBottom: '20px' }}>
+        <input 
+          type="text" 
+          value={newTask} 
+          onChange={(e) => setNewTask(e.target.value)} 
+          placeholder="New Task"
+          style={{ padding: '8px', marginRight: '8px', width: '70%' }}
+        />
+        <button type="submit" style={{ padding: '8px' }}>Add Task</button>
+      </form>
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
+      <ul style={{ listStyleType: 'none', padding: 0 }}>
+        {tasks.map(task => (
+          <li key={task.id} style={{ marginBottom: '10px', padding: '10px', border: '1px solid #ccc', borderRadius: '4px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <span style={{ textDecoration: task.status === "done" ? "line-through" : "none", flexGrow: 1 }}>
+              {task.name} ({task.status})
+            </span>
+            <div>
+              {task.status === "active" && (
+                <button onClick={() => markAsDone(task.id)} style={{ marginRight: '8px', cursor: 'pointer', padding: '4px 8px' }}>Mark as Done</button>
+              )}
+              <button onClick={() => deleteTask(task.id)} style={{ cursor: 'pointer', padding: '4px 8px' }}>Delete</button>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 
